@@ -1,22 +1,68 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
 void main() => runApp(const MyApp());
 
 class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
-  _MyAppState createState() => _MyAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  late GoogleMapController mapController;
+  final LatLng _initialCenter = const LatLng(-33.86, 151.20);
+  late LatLng _center;
+  String? _errorMessage;
+  final Completer<GoogleMapController> _controller = Completer();
 
-  final LatLng _center = const LatLng(45.521563, -122.677433);
+  @override
+  void initState() {
+    super.initState();
+    _center = _initialCenter;
+    _determinePosition();
+  }
 
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
+  Future<void> _determinePosition() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw 'Location services are disabled.';
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw 'Location permissions are denied';
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best,
+      );
+      setState(() {
+        _center = LatLng(position.latitude, position.longitude);
+      });
+
+      print('Current Position: $position');
+      print('Current Position: $_center'); // ここで _center の値を出力
+
+      final GoogleMapController controller = await _controller.future;
+      controller.animateCamera(CameraUpdate.newLatLng(_center));
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+      });
+    }
   }
 
   @override
@@ -27,23 +73,23 @@ class _MyAppState extends State<MyApp> {
           title: const Text('Maps Sample App'),
           backgroundColor: Colors.green[700],
         ),
-        body: GoogleMap(
-          onMapCreated: _onMapCreated,
-          initialCameraPosition: CameraPosition(
-            target: _center,
-            zoom: 11.0,
-          ),
-          markers: {
-            const Marker(
-              markerId: const MarkerId("Sydney"),
-              position: LatLng(-33.86, 151.20),
-              infoWindow: InfoWindow(
-                title: "Sydney",
-                snippet: "Capital of New South Wales",
+        body: _errorMessage != null
+            ? Center(child: Text('Error: $_errorMessage'))
+            : GoogleMap(
+                onMapCreated: (GoogleMapController controller) {
+                  _controller.complete(controller);
+                },
+                initialCameraPosition: CameraPosition(
+                  target: _center,
+                  zoom: 1.0,
+                ),
+                markers: {
+                  Marker(
+                    markerId: const MarkerId('currentLocation'),
+                    position: _center,
+                  )
+                },
               ),
-            ), // Marker
-          },
-        ),
       ),
     );
   }
