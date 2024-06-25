@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
-void main() => runApp(const MyApp());
+void main() =>
+    runApp(const MaterialApp(home: MyApp())); // MyApp を MaterialApp でラップ
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -18,6 +19,8 @@ class _MyAppState extends State<MyApp> {
   late LatLng _center;
   String? _errorMessage;
   final Completer<GoogleMapController> _controller = Completer();
+  final Set<Marker> markers = {};
+  final Map<MarkerId, String> markerInfo = {}; // マーカー情報を保持するマップ
 
   @override
   void initState() {
@@ -65,32 +68,102 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  void onLongPress(LatLng latLng) {
+    final markerId = MarkerId(latLng.toString());
+    setState(() {
+      markers.add(Marker(
+        markerId: markerId,
+        position: latLng,
+        onTap: () => _onMarkerTapped(markerId),
+      ));
+    });
+    _showAddMarkerDialog(markerId);
+  }
+
+  void _onMarkerTapped(MarkerId markerId) {
+    final info = markerInfo[markerId] ?? '';
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Marker Info'),
+          content: Text(info),
+          actions: [
+            TextButton(
+              child: Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Delete'),
+              onPressed: () {
+                setState(() {
+                  markers.removeWhere((marker) => marker.markerId == markerId);
+                  markerInfo.remove(markerId);
+                });
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showAddMarkerDialog(MarkerId markerId) {
+    final TextEditingController textEditingController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Add Marker Info'),
+          content: TextField(
+            controller: textEditingController,
+            decoration: InputDecoration(hintText: 'Enter marker info'),
+          ),
+          actions: [
+            TextButton(
+              child: Text('Save'),
+              onPressed: () {
+                setState(() {
+                  markerInfo[markerId] = textEditingController.text;
+                });
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Maps Sample App'),
-          backgroundColor: Colors.green[700],
-        ),
-        body: _errorMessage != null
-            ? Center(child: Text('Error: $_errorMessage'))
-            : GoogleMap(
-                onMapCreated: (GoogleMapController controller) {
-                  _controller.complete(controller);
-                },
-                initialCameraPosition: CameraPosition(
-                  target: _center,
-                  zoom: 1.0,
-                ),
-                markers: {
-                  Marker(
-                    markerId: const MarkerId('currentLocation'),
-                    position: _center,
-                  )
-                },
-              ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Maps Sample App'),
+        backgroundColor: Colors.green[700],
       ),
+      body: _errorMessage != null
+          ? Center(child: Text('Error: $_errorMessage'))
+          : GoogleMap(
+              onMapCreated: (GoogleMapController controller) {
+                _controller.complete(controller);
+              },
+              initialCameraPosition: CameraPosition(
+                target: _center,
+                zoom: 15.0,
+              ),
+              markers: markers,
+              onLongPress: onLongPress,
+            ),
     );
   }
 }
