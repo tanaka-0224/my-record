@@ -1,31 +1,21 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../models/marker_model.dart';
 
-void main() =>
-    runApp(const MaterialApp(home: MyApp())); // MyApp を MaterialApp でラップ
-
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
+class MapController extends ChangeNotifier {
   final LatLng _initialCenter = const LatLng(-33.86, 151.20);
-  late LatLng _center;
+  LatLng _center;
   String? _errorMessage;
   final Completer<GoogleMapController> _controller = Completer();
   final Set<Marker> markers = {};
-  final Map<MarkerId, String> markerInfo = {}; // マーカー情報を保持するマップ
+  final Map<MarkerId, String> markerInfo = {};
 
-  @override
-  void initState() {
-    super.initState();
-    _center = _initialCenter;
+  LatLng get center => _center;
+  String? get errorMessage => _errorMessage;
+
+  MapController() : _center = const LatLng(-33.86, 151.20) {
     _determinePosition();
   }
 
@@ -52,32 +42,34 @@ class _MyAppState extends State<MyApp> {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best,
       );
-      setState(() {
-        _center = LatLng(position.latitude, position.longitude);
-      });
+      _center = LatLng(position.latitude, position.longitude);
 
       final GoogleMapController controller = await _controller.future;
       controller.animateCamera(CameraUpdate.newLatLng(_center));
+
+      notifyListeners();
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-      });
+      _errorMessage = e.toString();
+      notifyListeners();
     }
   }
 
-  void onLongPress(LatLng latLng) {
-    final markerId = MarkerId(latLng.toString());
-    setState(() {
-      markers.add(Marker(
-        markerId: markerId,
-        position: latLng,
-        onTap: () => _onMarkerTapped(markerId),
-      ));
-    });
-    _showAddMarkerDialog(markerId);
+  void onMapCreated(GoogleMapController controller) {
+    _controller.complete(controller);
   }
 
-  void _onMarkerTapped(MarkerId markerId) {
+  void onLongPress(LatLng latLng, BuildContext context) {
+    final markerId = MarkerId(latLng.toString());
+    markers.add(Marker(
+      markerId: markerId,
+      position: latLng,
+      onTap: () => _onMarkerTapped(markerId, context),
+    ));
+    _showAddMarkerDialog(markerId, context);
+    notifyListeners();
+  }
+
+  void _onMarkerTapped(MarkerId markerId, BuildContext context) {
     final info = markerInfo[markerId] ?? '';
     showDialog(
       context: context,
@@ -95,10 +87,9 @@ class _MyAppState extends State<MyApp> {
             TextButton(
               child: const Text('Delete'),
               onPressed: () {
-                setState(() {
-                  markers.removeWhere((marker) => marker.markerId == markerId);
-                  markerInfo.remove(markerId);
-                });
+                markers.removeWhere((marker) => marker.markerId == markerId);
+                markerInfo.remove(markerId);
+                notifyListeners();
                 Navigator.of(context).pop();
               },
             ),
@@ -108,8 +99,9 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  void _showAddMarkerDialog(MarkerId markerId) {
-    final TextEditingController textEditingController = TextEditingController();
+  void _showAddMarkerDialog(MarkerId markerId, BuildContext context) {
+    final textEditingController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -123,9 +115,8 @@ class _MyAppState extends State<MyApp> {
             TextButton(
               child: const Text('Save'),
               onPressed: () {
-                setState(() {
-                  markerInfo[markerId] = textEditingController.text;
-                });
+                markerInfo[markerId] = textEditingController.text;
+                notifyListeners();
                 Navigator.of(context).pop();
               },
             ),
@@ -138,29 +129,6 @@ class _MyAppState extends State<MyApp> {
           ],
         );
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Maps Sample App'),
-        backgroundColor: Colors.green[700],
-      ),
-      body: _errorMessage != null
-          ? Center(child: Text('Error: $_errorMessage'))
-          : GoogleMap(
-              onMapCreated: (GoogleMapController controller) {
-                _controller.complete(controller);
-              },
-              initialCameraPosition: CameraPosition(
-                target: _center,
-                zoom: 15.0,
-              ),
-              markers: markers,
-              onLongPress: onLongPress,
-            ),
     );
   }
 }
