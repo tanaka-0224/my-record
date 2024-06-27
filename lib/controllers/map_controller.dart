@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import '../models/marker_model.dart';
 
 class MapController extends ChangeNotifier {
   final LatLng _initialCenter = const LatLng(-33.86, 151.20);
@@ -16,10 +15,17 @@ class MapController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   MapController() : _center = const LatLng(-33.86, 151.20) {
-    _determinePosition();
+    _init();
   }
 
-  Future<void> _determinePosition() async {
+  void _init() {
+    _updateCurrentPosition(); // 初回の位置更新
+    Timer.periodic(Duration(seconds: 10), (timer) {
+      _updateCurrentPosition(); // 10秒ごとに位置を更新
+    });
+  }
+
+  Future<void> _updateCurrentPosition() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -67,6 +73,53 @@ class MapController extends ChangeNotifier {
     ));
     _showAddMarkerDialog(markerId, context);
     notifyListeners();
+  }
+
+  Future<void> addMarkerAtCurrentLocation(BuildContext context) async {
+    final BitmapDescriptor? selectedIcon =
+        await _showIconSelectionDialog(context);
+    if (selectedIcon != null) {
+      final markerId = MarkerId(_center.toString());
+      markers.add(Marker(
+        markerId: markerId,
+        position: _center,
+        icon: selectedIcon,
+        onTap: () => _onMarkerTapped(markerId, context),
+      ));
+      _showAddMarkerDialog(markerId, context);
+      notifyListeners();
+    }
+  }
+
+  Future<BitmapDescriptor?> _showIconSelectionDialog(
+      BuildContext context) async {
+    return showDialog<BitmapDescriptor>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Select Marker Icon'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Image.asset('assets/images/3678.png',
+                    width: 48, height: 48),
+                title: const Text('Icon 1'),
+                onTap: () async {
+                  final icon = await BitmapDescriptor.fromAssetImage(
+                    const ImageConfiguration(size: Size(48, 48)),
+                    'assets/images/3678.png',
+                  );
+                  Navigator.of(context).pop(icon);
+                },
+              ),
+
+              // 他のアイコンも同様に追加
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _onMarkerTapped(MarkerId markerId, BuildContext context) {

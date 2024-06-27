@@ -24,9 +24,13 @@ class MapScreen extends StatelessWidget {
                 zoom: 15.0,
               ),
               markers: mapController.markers,
-              onLongPress: (LatLng latLng) =>
-                  mapController.onLongPress(latLng, context),
             ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          mapController.addMarkerAtCurrentLocation(context);
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }
