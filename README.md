@@ -1,6 +1,8 @@
 # my_record
 
-A new Flutter project.
+現在地を取得してピンをさせるアプリ
+
+apikeyを.gitignoreの記入ミスによりpushしてしまったため、削除し、再生成
 
 ## Getting Started
 
