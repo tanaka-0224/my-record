@@ -113,7 +113,18 @@ class MapController extends ChangeNotifier {
                   Navigator.of(context).pop(icon);
                 },
               ),
-
+              ListTile(
+                leading: Image.asset('assets/images/restaurant.png',
+                    width: 48, height: 48),
+                title: const Text('Icon 1'),
+                onTap: () async {
+                  final icon = await BitmapDescriptor.fromAssetImage(
+                    const ImageConfiguration(size: Size(48, 48)),
+                    'assets/images/restaurant.png',
+                  );
+                  Navigator.of(context).pop(icon);
+                },
+              ),
               // 他のアイコンも同様に追加
             ],
           ),

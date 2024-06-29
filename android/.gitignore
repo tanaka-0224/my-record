@@ -13,5 +13,5 @@ key.properties
 **/*.jks
 
 # api
-/secrets.properties
+/secrets.properities
 /app/src/main/AndroidManifest.xml
