@@ -20,7 +20,7 @@ class MapController extends ChangeNotifier {
 
   void _init() {
     _updateCurrentPosition(); // 初回の位置更新
-    Timer.periodic(Duration(seconds: 10), (timer) {
+    Timer.periodic(const Duration(seconds: 10), (timer) {
       _updateCurrentPosition(); // 10秒ごとに位置を更新
     });
   }
