@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart'; // importを追加
+import 'dart:typed_data'; // importを追加
+import 'package:image/image.dart' as img; // importを追加
 
 class MapController extends ChangeNotifier {
   final LatLng _initialCenter = const LatLng(-33.86, 151.20);
@@ -93,6 +97,8 @@ class MapController extends ChangeNotifier {
 
   Future<BitmapDescriptor?> _showIconSelectionDialog(
       BuildContext context) async {
+    final ImagePicker _picker = ImagePicker(); // ImagePickerのインスタンスを作成
+
     return showDialog<BitmapDescriptor>(
       context: context,
       builder: (BuildContext context) {
@@ -116,7 +122,7 @@ class MapController extends ChangeNotifier {
               ListTile(
                 leading: Image.asset('assets/images/restaurant.png',
                     width: 48, height: 48),
-                title: const Text('Icon 1'),
+                title: const Text('Icon 2'),
                 onTap: () async {
                   final icon = await BitmapDescriptor.fromAssetImage(
                     const ImageConfiguration(size: Size(48, 48)),
@@ -125,12 +131,34 @@ class MapController extends ChangeNotifier {
                   Navigator.of(context).pop(icon);
                 },
               ),
-              // 他のアイコンも同様に追加
+              ListTile(
+                leading: const Icon(Icons.photo, size: 48),
+                title: const Text('Choose from Photos'),
+                onTap: () async {
+                  final XFile? photo =
+                      await _picker.pickImage(source: ImageSource.gallery);
+                  if (photo != null) {
+                    final bytes = await _resizeAndConvertToBytes(photo.path);
+                    final icon = BitmapDescriptor.fromBytes(bytes);
+                    Navigator.of(context).pop(icon);
+                  } else {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
             ],
           ),
         );
       },
     );
+  }
+
+  Future<Uint8List> _resizeAndConvertToBytes(String imagePath) async {
+    final File imageFile = File(imagePath);
+    final img.Image? image = img.decodeImage(imageFile.readAsBytesSync());
+    final img.Image resizedImage =
+        img.copyResize(image!, width: 200, height: 200);
+    return Uint8List.fromList(img.encodePng(resizedImage));
   }
 
   void _onMarkerTapped(MarkerId markerId, BuildContext context) {
