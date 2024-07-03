@@ -1,35 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
-import '../controllers/map_controller.dart';
+import 'package:my_record/controllers/map_controller.dart';
 
 class MapScreen extends StatelessWidget {
-  const MapScreen({super.key});
-
   @override
   Widget build(BuildContext context) {
-    final mapController = Provider.of<MapController>(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Maps Sample App'),
-        backgroundColor: Colors.green[700],
-      ),
-      body: mapController.errorMessage != null
-          ? Center(child: Text('Error: ${mapController.errorMessage}'))
-          : GoogleMap(
-              onMapCreated: mapController.onMapCreated,
+    return ChangeNotifierProvider(
+      create: (_) => MapController(context),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Map Screen'),
+        ),
+        body: Consumer<MapController>(
+          builder: (context, mapController, child) {
+            return GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: mapController.center,
-                zoom: 15.0,
+                zoom: 14.0,
               ),
+              onMapCreated: mapController.onMapCreated,
               markers: mapController.markers,
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          mapController.addMarkerAtCurrentLocation(context);
-        },
-        child: const Icon(Icons.add),
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+            );
+          },
+        ),
+        floatingActionButton: Consumer<MapController>(
+          builder: (context, mapController, child) {
+            return FloatingActionButton(
+              onPressed: () =>
+                  mapController.addMarkerAtCurrentLocation(context),
+              child: const Icon(Icons.add_location),
+            );
+          },
+        ),
       ),
     );
   }

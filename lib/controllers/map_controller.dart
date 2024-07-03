@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart'; // importを追加
-import 'dart:typed_data'; // importを追加
-import 'package:image/image.dart' as img; // importを追加
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
+import 'package:image/image.dart' as img;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class MapController extends ChangeNotifier {
   final LatLng _initialCenter = const LatLng(-33.86, 151.20);
@@ -18,11 +20,12 @@ class MapController extends ChangeNotifier {
   LatLng get center => _center;
   String? get errorMessage => _errorMessage;
 
-  MapController() : _center = const LatLng(-33.86, 151.20) {
-    _init();
+  MapController(BuildContext context) : _center = const LatLng(-33.86, 151.20) {
+    _init(context);
   }
 
-  void _init() {
+  Future<void> _init(BuildContext context) async {
+    await _loadMarkers(context);
     _updateCurrentPosition(); // 初回の位置更新
     Timer.periodic(const Duration(seconds: 10), (timer) {
       _updateCurrentPosition(); // 10秒ごとに位置を更新
@@ -68,17 +71,6 @@ class MapController extends ChangeNotifier {
     _controller.complete(controller);
   }
 
-  void onLongPress(LatLng latLng, BuildContext context) {
-    final markerId = MarkerId(latLng.toString());
-    markers.add(Marker(
-      markerId: markerId,
-      position: latLng,
-      onTap: () => _onMarkerTapped(markerId, context),
-    ));
-    _showAddMarkerDialog(markerId, context);
-    notifyListeners();
-  }
-
   Future<void> addMarkerAtCurrentLocation(BuildContext context) async {
     final BitmapDescriptor? selectedIcon =
         await _showIconSelectionDialog(context);
@@ -91,6 +83,7 @@ class MapController extends ChangeNotifier {
         onTap: () => _onMarkerTapped(markerId, context),
       ));
       _showAddMarkerDialog(markerId, context);
+      await _saveMarkers();
       notifyListeners();
     }
   }
@@ -178,9 +171,10 @@ class MapController extends ChangeNotifier {
             ),
             TextButton(
               child: const Text('Delete'),
-              onPressed: () {
+              onPressed: () async {
                 markers.removeWhere((marker) => marker.markerId == markerId);
                 markerInfo.remove(markerId);
+                await _saveMarkers(); // Save markers after deletion
                 notifyListeners();
                 Navigator.of(context).pop();
               },
@@ -191,7 +185,8 @@ class MapController extends ChangeNotifier {
     );
   }
 
-  void _showAddMarkerDialog(MarkerId markerId, BuildContext context) {
+  Future<void> _showAddMarkerDialog(
+      MarkerId markerId, BuildContext context) async {
     final textEditingController = TextEditingController();
 
     showDialog(
@@ -206,8 +201,9 @@ class MapController extends ChangeNotifier {
           actions: [
             TextButton(
               child: const Text('Save'),
-              onPressed: () {
+              onPressed: () async {
                 markerInfo[markerId] = textEditingController.text;
+                await _saveMarkers(); // Save marker info
                 notifyListeners();
                 Navigator.of(context).pop();
               },
@@ -222,5 +218,59 @@ class MapController extends ChangeNotifier {
         );
       },
     );
+  }
+
+  Future<void> _saveMarkers() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final List<String> markerList = markers.map((marker) {
+      return jsonEncode({
+        'markerId': marker.markerId.value,
+        'position': {
+          'latitude': marker.position.latitude,
+          'longitude': marker.position.longitude,
+        },
+        'info': markerInfo[marker.markerId] ?? '',
+        'iconPath': marker.infoWindow.snippet ?? '', // アイコンのパスを保存
+      });
+    }).toList();
+    await prefs.setStringList('markers', markerList);
+    print('Markers saved: $markerList'); // デバッグコンソールに出力
+  }
+
+  Future<void> _loadMarkers(BuildContext context) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final List<String>? markerList = prefs.getStringList('markers');
+    if (markerList != null) {
+      for (final String markerString in markerList) {
+        final Map<String, dynamic> markerMap = jsonDecode(markerString);
+        final MarkerId markerId = MarkerId(markerMap['markerId']);
+        final LatLng position = LatLng(
+          markerMap['position']['latitude'],
+          markerMap['position']['longitude'],
+        );
+        final String info = markerMap['info'];
+        final String iconPath = markerMap['iconPath']; // アイコンのパスを取得
+
+        BitmapDescriptor icon;
+        if (iconPath.isNotEmpty) {
+          icon = await BitmapDescriptor.fromAssetImage(
+            const ImageConfiguration(size: Size(48, 48)),
+            iconPath,
+          );
+        } else {
+          icon = BitmapDescriptor.defaultMarker; // デフォルトのマーカーアイコン
+        }
+
+        markers.add(Marker(
+          markerId: markerId,
+          position: position,
+          icon: icon,
+          onTap: () => _onMarkerTapped(markerId, context), // contextを追加
+        ));
+        markerInfo[markerId] = info;
+      }
+      print('Markers loaded: $markerList'); // デバッグコンソールに出力
+    }
+    notifyListeners();
   }
 }
