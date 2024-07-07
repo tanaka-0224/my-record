@@ -17,7 +17,7 @@ class MapScreen extends StatelessWidget {
             return GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: mapController.center,
-                zoom: 14.0,
+                zoom: 18.0,
               ),
               onMapCreated: mapController.onMapCreated,
               markers: mapController.markers,

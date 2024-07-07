@@ -8,14 +8,15 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:path_provider/path_provider.dart';
 
 class MapController extends ChangeNotifier {
-  final LatLng _initialCenter = const LatLng(-33.86, 151.20);
   LatLng _center;
   String? _errorMessage;
   final Completer<GoogleMapController> _controller = Completer();
   final Set<Marker> markers = {};
   final Map<MarkerId, String> markerInfo = {};
+  final Map<MarkerId, String> markerIconPaths = {};
 
   LatLng get center => _center;
   String? get errorMessage => _errorMessage;
@@ -96,31 +97,15 @@ class MapController extends ChangeNotifier {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Select Marker Icon'),
+          title: const Text('Marker Icon'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: Image.asset('assets/images/3678.png',
-                    width: 48, height: 48),
-                title: const Text('Icon 1'),
+                leading: const Icon(Icons.location_on, size: 48),
+                title: const Text('Default Icon'),
                 onTap: () async {
-                  final icon = await BitmapDescriptor.fromAssetImage(
-                    const ImageConfiguration(size: Size(48, 48)),
-                    'assets/images/3678.png',
-                  );
-                  Navigator.of(context).pop(icon);
-                },
-              ),
-              ListTile(
-                leading: Image.asset('assets/images/restaurant.png',
-                    width: 48, height: 48),
-                title: const Text('Icon 2'),
-                onTap: () async {
-                  final icon = await BitmapDescriptor.fromAssetImage(
-                    const ImageConfiguration(size: Size(48, 48)),
-                    'assets/images/restaurant.png',
-                  );
+                  final icon = BitmapDescriptor.defaultMarker;
                   Navigator.of(context).pop(icon);
                 },
               ),
@@ -131,8 +116,10 @@ class MapController extends ChangeNotifier {
                   final XFile? photo =
                       await _picker.pickImage(source: ImageSource.gallery);
                   if (photo != null) {
-                    final bytes = await _resizeAndConvertToBytes(photo.path);
+                    final savedPath = await _saveImageToFileSystem(photo.path);
+                    final bytes = await _resizeAndConvertToBytes(savedPath);
                     final icon = BitmapDescriptor.fromBytes(bytes);
+                    markerIconPaths[MarkerId(_center.toString())] = savedPath;
                     Navigator.of(context).pop(icon);
                   } else {
                     Navigator.of(context).pop();
@@ -146,11 +133,19 @@ class MapController extends ChangeNotifier {
     );
   }
 
+  Future<String> _saveImageToFileSystem(String imagePath) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final fileName = imagePath.split('/').last;
+    final savedPath = '${directory.path}/$fileName';
+    await File(imagePath).copy(savedPath);
+    return savedPath;
+  }
+
   Future<Uint8List> _resizeAndConvertToBytes(String imagePath) async {
     final File imageFile = File(imagePath);
     final img.Image? image = img.decodeImage(imageFile.readAsBytesSync());
     final img.Image resizedImage =
-        img.copyResize(image!, width: 200, height: 200);
+        img.copyResize(image!, width: 50, height: 50);
     return Uint8List.fromList(img.encodePng(resizedImage));
   }
 
@@ -174,6 +169,7 @@ class MapController extends ChangeNotifier {
               onPressed: () async {
                 markers.removeWhere((marker) => marker.markerId == markerId);
                 markerInfo.remove(markerId);
+                markerIconPaths.remove(markerId);
                 await _saveMarkers(); // Save markers after deletion
                 notifyListeners();
                 Navigator.of(context).pop();
@@ -230,7 +226,7 @@ class MapController extends ChangeNotifier {
           'longitude': marker.position.longitude,
         },
         'info': markerInfo[marker.markerId] ?? '',
-        'iconPath': marker.infoWindow.snippet ?? '', // アイコンのパスを保存
+        'iconPath': markerIconPaths[marker.markerId] ?? '',
       });
     }).toList();
     await prefs.setStringList('markers', markerList);
@@ -250,13 +246,11 @@ class MapController extends ChangeNotifier {
         );
         final String info = markerMap['info'];
         final String iconPath = markerMap['iconPath']; // アイコンのパスを取得
+        BitmapDescriptor icon = BitmapDescriptor.defaultMarker;
 
-        BitmapDescriptor icon;
         if (iconPath.isNotEmpty) {
-          icon = await BitmapDescriptor.fromAssetImage(
-            const ImageConfiguration(size: Size(48, 48)),
-            iconPath,
-          );
+          final bytes = await _resizeAndConvertToBytes(iconPath);
+          icon = BitmapDescriptor.fromBytes(bytes);
         } else {
           icon = BitmapDescriptor.defaultMarker; // デフォルトのマーカーアイコン
         }
@@ -268,6 +262,7 @@ class MapController extends ChangeNotifier {
           onTap: () => _onMarkerTapped(markerId, context), // contextを追加
         ));
         markerInfo[markerId] = info;
+        markerIconPaths[markerId] = iconPath;
       }
       print('Markers loaded: $markerList'); // デバッグコンソールに出力
     }
